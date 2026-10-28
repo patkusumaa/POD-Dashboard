@@ -1,0 +1,886 @@
+<!DOCTYPE html>
+<html lang="th" class="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ระบบติดตามสถิติการไม่ปิดงาน POD (POD Pending Dashboard)</title>
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    colors: {
+                        brand: {
+                            50: '#f0f7ff',
+                            100: '#e0effe',
+                            500: '#0284c7',
+                            600: '#0369a1',
+                            700: '#075985',
+                        }
+                    },
+                    fontFamily: {
+                        sans: ['Inter', 'Kanit', 'sans-serif'],
+                    }
+                }
+            }
+        }
+    </script>
+    <!-- Google Fonts (Kanit & Inter) -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Kanit:wght@300;400;500;600&display=swap" rel="stylesheet">
+    <!-- Chart.js CDN -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <!-- SheetJS (xlsx) for reading and writing Excel/CSV files -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+    <!-- FontAwesome Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        body {
+            font-family: 'Kanit', 'Inter', sans-serif;
+        }
+        /* Custom scrollbar */
+        ::-webkit-scrollbar {
+            width: 6px;
+            height: 6px;
+        }
+        ::-webkit-scrollbar-track {
+            background: rgba(0,0,0,0.05);
+        }
+        ::-webkit-scrollbar-thumb {
+            background: rgba(0,0,0,0.2);
+            border-radius: 3px;
+        }
+        .dark ::-webkit-scrollbar-track {
+            background: rgba(255,255,255,0.05);
+        }
+        .dark ::-webkit-scrollbar-thumb {
+            background: rgba(255,255,255,0.2);
+        }
+    </style>
+</head>
+<body class="bg-slate-50 dark:bg-slate-900 text-slate-800 dark:text-slate-100 min-h-screen transition-colors duration-200">
+
+    <!-- Top Navigation Bar -->
+    <header class="bg-white dark:bg-slate-800 border-b border-slate-200 dark:border-slate-700 sticky top-0 z-30 shadow-sm">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="flex justify-between h-16 items-center">
+                <div class="flex items-center space-x-3">
+                    <div class="p-2.5 bg-blue-600 text-white rounded-xl shadow-md shadow-blue-500/20">
+                        <i class="fa-solid font-bold fa-truck-ramp-box text-xl"></i>
+                    </div>
+                    <div>
+                        <h1 class="text-lg font-bold leading-tight text-slate-900 dark:text-white">ระบบติดตามสถิติการไม่ปิดงาน POD</h1>
+                        <p class="text-xs text-slate-500 dark:text-slate-400">POD Pending & Vehicle Tracking Dashboard</p>
+                    </div>
+                </div>
+                
+                <div class="flex items-center space-x-3">
+                    <!-- Quick Load Sample Data Button -->
+                    <button id="btnLoadSample" class="inline-flex items-center px-3 py-1.5 text-xs sm:text-sm font-medium rounded-lg text-blue-700 bg-blue-50 hover:bg-blue-100 dark:bg-slate-700 dark:text-blue-300 dark:hover:bg-slate-600 transition-colors">
+                        <i class="fa-solid fa-magic mr-1.5"></i> ใช้ข้อมูลตัวอย่าง
+                    </button>
+                    <!-- Download Sample File -->
+                    <button id="btnDownloadTemplate" class="inline-flex items-center px-3 py-1.5 text-xs sm:text-sm font-medium rounded-lg text-emerald-700 bg-emerald-50 hover:bg-emerald-100 dark:bg-slate-700 dark:text-emerald-300 dark:hover:bg-slate-600 transition-colors">
+                        <i class="fa-solid fa-file-excel mr-1.5"></i> แม่แบบ CSV
+                    </button>
+                    <!-- Dark/Light Theme Toggle -->
+                    <button id="themeToggle" class="p-2 text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200 rounded-lg focus:outline-none">
+                        <i id="themeIcon" class="fa-solid fa-moon text-lg"></i>
+                    </button>
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 space-y-6">
+
+        <!-- File Upload Section / Drag & Drop -->
+        <section class="bg-white dark:bg-slate-800 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-700 p-6 transition-all">
+            <div id="dropZone" class="border-2 border-dashed border-slate-300 dark:border-slate-600 hover:border-blue-500 dark:hover:border-blue-400 rounded-xl p-6 text-center cursor-pointer transition-colors bg-slate-50/50 dark:bg-slate-800/50">
+                <input type="file" id="fileInput" class="hidden" accept=".csv, .xlsx, .xls">
+                <div class="flex flex-col items-center justify-center space-y-2">
+                    <div class="p-3 bg-blue-50 dark:bg-slate-700 text-blue-600 dark:text-blue-400 rounded-full">
+                        <i class="fa-solid fa-cloud-arrow-up text-2xl"></i>
+                    </div>
+                    <div>
+                        <p class="text-sm font-medium text-slate-700 dark:text-slate-200">
+                            คลิกเพื่ออัปโหลดไฟล์ หรือลากไฟล์มาวางที่นี่
+                        </p>
+                        <p class="text-xs text-slate-500 dark:text-slate-400 mt-1">
+                            รองรับไฟล์ CSV, Excel (.xlsx, .xls) ตามโครงสร้างรายการค้าง POD
+                        </p>
+                    </div>
+                    <div id="fileNameDisplay" class="hidden text-xs font-semibold text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-slate-700 px-3 py-1 rounded-full">
+                        <!-- Loaded filename goes here -->
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- KPI Cards Summary -->
+        <section class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+            <!-- Card 1: Total Box/Tote -->
+            <div class="bg-white dark:bg-slate-800 rounded-2xl p-5 border border-slate-200 dark:border-slate-700 shadow-sm flex items-center justify-between">
+                <div>
+                    <p class="text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider">งานค้างทั้งหมด (Box/Tote)</p>
+                    <h3 id="kpiTotalItems" class="text-2xl font-bold text-slate-900 dark:text-white mt-1">0</h3>
+                    <span class="text-xs text-slate-400 font-normal">รายการพัสดุ/กล่อง</span>
+                </div>
+                <div class="p-3.5 bg-amber-50 dark:bg-amber-950/40 text-amber-600 dark:text-amber-400 rounded-2xl">
+                    <i class="fa-solid fa-boxes-stacked text-xl"></i>
+                </div>
+            </div>
+
+            <!-- Card 2: Total Pending Trips -->
+            <div class="bg-white dark:bg-slate-800 rounded-2xl p-5 border border-slate-200 dark:border-slate-700 shadow-sm flex items-center justify-between">
+                <div>
+                    <p class="text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider">จำนวนใบเที่ยวที่ค้าง</p>
+                    <h3 id="kpiTotalTrips" class="text-2xl font-bold text-slate-900 dark:text-white mt-1">0</h3>
+                    <span class="text-xs text-slate-400 font-normal">ใบเที่ยว (Trip No.)</span>
+                </div>
+                <div class="p-3.5 bg-blue-50 dark:bg-blue-950/40 text-blue-600 dark:text-blue-400 rounded-2xl">
+                    <i class="fa-solid fa-route text-xl"></i>
+                </div>
+            </div>
+
+            <!-- Card 3: Unique Vehicles -->
+            <div class="bg-white dark:bg-slate-800 rounded-2xl p-5 border border-slate-200 dark:border-slate-700 shadow-sm flex items-center justify-between">
+                <div>
+                    <p class="text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider">จำนวนทะเบียนรถที่พบปัญหา</p>
+                    <h3 id="kpiTotalVehicles" class="text-2xl font-bold text-slate-900 dark:text-white mt-1">0</h3>
+                    <span class="text-xs text-slate-400 font-normal">คันที่มีเคสค้าง</span>
+                </div>
+                <div class="p-3.5 bg-indigo-50 dark:bg-indigo-950/40 text-indigo-600 dark:text-indigo-400 rounded-2xl">
+                    <i class="fa-solid fa-truck-moving text-xl"></i>
+                </div>
+            </div>
+
+            <!-- Card 4: Top Repeated Vehicle -->
+            <div class="bg-white dark:bg-slate-800 rounded-2xl p-5 border border-slate-200 dark:border-slate-700 shadow-sm flex items-center justify-between">
+                <div>
+                    <p class="text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider">ทะเบียนที่พบซ้ำมากที่สุด</p>
+                    <h3 id="kpiTopVehicle" class="text-xl font-bold text-rose-600 dark:text-rose-400 mt-1 truncate max-w-[150px]">-</h3>
+                    <span id="kpiTopVehicleCount" class="text-xs text-rose-500 font-medium">0 เคส</span>
+                </div>
+                <div class="p-3.5 bg-rose-50 dark:bg-rose-950/40 text-rose-600 dark:text-rose-400 rounded-2xl">
+                    <i class="fa-solid fa-triangle-exclamation text-xl"></i>
+                </div>
+            </div>
+        </section>
+
+        <!-- Charts Visualizations Grid -->
+        <section class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            <!-- Top Vehicles Bar Chart (Span 2) -->
+            <div class="lg:col-span-2 bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 p-5 shadow-sm">
+                <div class="flex items-center justify-between mb-4">
+                    <div>
+                        <h2 class="text-base font-bold text-slate-900 dark:text-white">Top 5 ทะเบียนรถที่มีงานค้างปิด POD มากที่สุด</h2>
+                        <p class="text-xs text-slate-500 dark:text-slate-400">เน้นทะเบียนที่เกิดปัญหาซ้ำเพื่อนำไปเร่งรัดติดตามต่อ</p>
+                    </div>
+                    <span class="px-2.5 py-1 text-xs font-medium bg-rose-100 text-rose-700 dark:bg-rose-950/50 dark:text-rose-300 rounded-full">
+                        <i class="fa-solid fa-arrows-rotate mr-1"></i> ตรวจสอบเคสซ้ำ
+                    </span>
+                </div>
+                <div class="relative h-64 sm:h-72">
+                    <canvas id="chartTopVehicles"></canvas>
+                </div>
+            </div>
+
+            <!-- Pending Reason Pie Chart (Span 1) -->
+            <div class="bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 p-5 shadow-sm">
+                <div class="flex items-center justify-between mb-4">
+                    <div>
+                        <h2 class="text-base font-bold text-slate-900 dark:text-white">สัดส่วนสาเหตุที่ไม่ปิดงาน POD</h2>
+                        <p class="text-xs text-slate-500 dark:text-slate-400">จำแนกตามสาเหตุหลักของการไม่ปิด POD</p>
+                    </div>
+                </div>
+                <div class="relative h-64 sm:h-72 flex items-center justify-center">
+                    <canvas id="chartReasons"></canvas>
+                </div>
+            </div>
+
+            <!-- Carrier/Vendor Breakdown Chart (Span 3) -->
+            <div class="lg:col-span-3 bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 p-5 shadow-sm">
+                <div class="flex items-center justify-between mb-4">
+                    <div>
+                        <h2 class="text-base font-bold text-slate-900 dark:text-white">จำนวนค้างปิดงานจำแนกตามสังกัด / บริษัทขนส่ง</h2>
+                        <p class="text-xs text-slate-500 dark:text-slate-400">เปรียบเทียบปริมาณงานค้างแยกตามผู้ให้บริการขนส่ง</p>
+                    </div>
+                </div>
+                <div class="relative h-56 sm:h-64">
+                    <canvas id="chartCarriers"></canvas>
+                </div>
+            </div>
+        </section>
+
+        <!-- Detailed Interactive Data Table -->
+        <section class="bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-sm overflow-hidden">
+            <!-- Table Header & Controls -->
+            <div class="p-5 border-b border-slate-200 dark:border-slate-700 space-y-4">
+                <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                    <div>
+                        <h2 class="text-base font-bold text-slate-900 dark:text-white flex items-center gap-2">
+                            <span>รายการรายละเอียดค้างปิดงาน POD</span>
+                            <span id="badgeCount" class="text-xs bg-blue-100 text-blue-700 dark:bg-slate-700 dark:text-blue-300 px-2.5 py-0.5 rounded-full font-semibold">0 รายการ</span>
+                        </h2>
+                        <p class="text-xs text-slate-500 dark:text-slate-400">รายการที่ไฮไลท์ <span class="text-rose-600 dark:text-rose-400 font-semibold">สีแดง</span> คือทะเบียนที่พบการค้างปิดงานซ้ำซ้อน (2 ครั้งขึ้นไป)</p>
+                    </div>
+                    <div class="flex items-center space-x-2">
+                        <button id="btnExport" class="inline-flex items-center px-3.5 py-2 text-xs font-semibold rounded-xl text-white bg-emerald-600 hover:bg-emerald-700 shadow-sm transition-colors">
+                            <i class="fa-solid fa-file-export mr-1.5"></i> Export Excel/CSV
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Filters Bar -->
+                <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3 pt-2">
+                    <div>
+                        <label class="block text-xs font-medium text-slate-500 dark:text-slate-400 mb-1">ค้นหา (ทะเบียน/ใบเที่ยว/สาขา)</label>
+                        <div class="relative">
+                            <input type="text" id="searchInput" placeholder="พิมพ์เพื่อค้นหา..." class="w-full text-xs pl-8 pr-3 py-2 bg-slate-50 dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded-xl focus:ring-2 focus:ring-blue-500 focus:outline-none dark:text-white">
+                            <i class="fa-solid fa-magnifying-glass absolute left-2.5 top-2.5 text-slate-400 text-xs"></i>
+                        </div>
+                    </div>
+                    <div>
+                        <label class="block text-xs font-medium text-slate-500 dark:text-slate-400 mb-1">กรองสังกัด</label>
+                        <select id="filterCarrier" class="w-full text-xs px-3 py-2 bg-slate-50 dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded-xl focus:ring-2 focus:ring-blue-500 focus:outline-none dark:text-white">
+                            <option value="">ทั้งหมดทุกสังกัด</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-xs font-medium text-slate-500 dark:text-slate-400 mb-1">กรองสาเหตุที่ไม่ปิดงาน</label>
+                        <select id="filterReason" class="w-full text-xs px-3 py-2 bg-slate-50 dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded-xl focus:ring-2 focus:ring-blue-500 focus:outline-none dark:text-white">
+                            <option value="">ทั้งหมดทุกสาเหตุ</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-xs font-medium text-slate-500 dark:text-slate-400 mb-1">กรองเฉพาะเคสทะเบียนซ้ำ</label>
+                        <select id="filterRepeated" class="w-full text-xs px-3 py-2 bg-slate-50 dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded-xl focus:ring-2 focus:ring-blue-500 focus:outline-none dark:text-white">
+                            <option value="all">รายการทั้งหมด</option>
+                            <option value="repeated">เฉพาะทะเบียนซ้ำ (≥ 2 เคส)</option>
+                        </select>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Table Responsive Wrapper -->
+            <div class="overflow-x-auto">
+                <table class="w-full text-left border-collapse">
+                    <thead>
+                        <tr class="bg-slate-100/70 dark:bg-slate-700/50 text-slate-600 dark:text-slate-300 text-xs font-semibold uppercase tracking-wider">
+                            <th class="p-3.5">วันที่</th>
+                            <th class="p-3.5">ทะเบียนรถ</th>
+                            <th class="p-3.5">สังกัด</th>
+                            <th class="p-3.5">เลขที่ใบเที่ยว</th>
+                            <th class="p-3.5">Store No & Name</th>
+                            <th class="p-3.5">Order / Box ID</th>
+                            <th class="p-3.5">สาเหตุที่ไม่ปิดงาน</th>
+                            <th class="p-3.5">สถานะ / การติดตาม</th>
+                            <th class="p-3.5 text-center">จัดการ</th>
+                        </tr>
+                    </thead>
+                    <tbody id="tableBody" class="divide-y divide-slate-200 dark:divide-slate-700 text-xs">
+                        <!-- Table rows generated dynamically -->
+                    </tbody>
+                </table>
+            </div>
+
+            <!-- Empty State / Pagination Info -->
+            <div id="emptyState" class="hidden p-8 text-center text-slate-500 dark:text-slate-400">
+                <i class="fa-solid fa-folder-open text-4xl mb-2 opacity-50"></i>
+                <p>ไม่พบข้อมูลที่ตรงกับการกรอง หรือโปรดอัปโหลดไฟล์ข้อมูลก่อน</p>
+            </div>
+        </section>
+
+    </main>
+
+    <!-- Modal for Editing Follow-up / Reason -->
+    <div id="editModal" class="fixed inset-0 z-50 hidden bg-slate-900/50 backdrop-blur-sm flex items-center justify-center p-4">
+        <div class="bg-white dark:bg-slate-800 rounded-2xl max-w-md w-full p-6 shadow-xl border border-slate-200 dark:border-slate-700">
+            <div class="flex justify-between items-center mb-4">
+                <h3 class="text-base font-bold text-slate-900 dark:text-white">อัปเดตสถานะและบันทึกติดตามงาน</h3>
+                <button id="btnCloseModal" class="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200">
+                    <i class="fa-solid fa-xmark text-lg"></i>
+                </button>
+            </div>
+            
+            <form id="editForm" class="space-y-4">
+                <input type="hidden" id="editRowId">
+                <div>
+                    <label class="block text-xs font-medium text-slate-600 dark:text-slate-300 mb-1">ทะเบียนรถ</label>
+                    <input type="text" id="modalVehicle" readonly class="w-full text-xs px-3 py-2 bg-slate-100 dark:bg-slate-700/50 border border-slate-300 dark:border-slate-600 rounded-xl text-slate-700 dark:text-slate-300 font-semibold">
+                </div>
+                <div>
+                    <label class="block text-xs font-medium text-slate-600 dark:text-slate-300 mb-1">สาเหตุที่ไม่ปิดงาน POD</label>
+                    <select id="modalReason" class="w-full text-xs px-3 py-2 bg-slate-50 dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded-xl focus:ring-2 focus:ring-blue-500 dark:text-white">
+                        <option value="พนักงานลืมกดปิดงาน">พนักงานลืมกดปิดงาน</option>
+                        <option value="ระบบ Application/เน็ต ขัดข้อง">ระบบ Application/เน็ต ขัดข้อง</option>
+                        <option value="ลูกค้ายังไม่เซ็นรับ/ติดต่อไม่ได้">ลูกค้ายังไม่เซ็นรับ/ติดต่อไม่ได้</option>
+                        <option value="เอกสารใบส่งสินค้าไม่ครบ">เอกสารใบส่งสินค้าไม่ครบ</option>
+                        <option value="สินค้ามีปัญหา/ปฏิเสธการรับ">สินค้ามีปัญหา/ปฏิเสธการรับ</option>
+                        <option value="อื่นๆ (ระบุในโน้ต)">อื่นๆ (ระบุในโน้ต)</option>
+                    </select>
+                </div>
+                <div>
+                    <label class="block text-xs font-medium text-slate-600 dark:text-slate-300 mb-1">สถานะ POD</label>
+                    <select id="modalStatus" class="w-full text-xs px-3 py-2 bg-slate-50 dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded-xl focus:ring-2 focus:ring-blue-500 dark:text-white">
+                        <option value="ยังไม่ปิดงาน">ยังไม่ปิดงาน (Pending)</option>
+                        <option value="ปิดงานเรียบร้อยแล้ว">ปิดงานเรียบร้อยแล้ว (Resolved)</option>
+                    </select>
+                </div>
+                <div>
+                    <label class="block text-xs font-medium text-slate-600 dark:text-slate-300 mb-1">บันทึกความคืบหน้าติดตามงาน (Note)</label>
+                    <textarea id="modalNote" rows="3" placeholder="ระบุข้อมูลการประสานงานกับ พขร. หรือสายงาน..." class="w-full text-xs p-3 bg-slate-50 dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded-xl focus:ring-2 focus:ring-blue-500 dark:text-white"></textarea>
+                </div>
+                
+                <div class="flex justify-end space-x-2 pt-2">
+                    <button type="button" id="btnCancelModal" class="px-4 py-2 text-xs font-medium text-slate-600 bg-slate-100 hover:bg-slate-200 dark:bg-slate-700 dark:text-slate-300 dark:hover:bg-slate-600 rounded-xl">ยกเลิก</button>
+                    <button type="submit" class="px-4 py-2 text-xs font-medium text-white bg-blue-600 hover:bg-blue-700 rounded-xl shadow-sm">บันทึกข้อมูล</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Application Script Logic -->
+    <script>
+        // Default Sample Mock Data matching user's image structure
+        const defaultSampleData = [
+            { id: 1, date: '2026-10-28', tripNo: 'CO4RA69554', storeNo: '6384', storeName: 'สาขา สุขุมวิท-สว่างฟ้า', orderNo: 'C436874305', boxId: '5830872', vehicle: '71-0710', carrier: 'บจ. เมอร์เมดโลจิสติกส์', reason: 'พนักงานลืมกดปิดงาน', status: 'ยังไม่ปิดงาน', note: 'โทรแจ้ง พขร. แล้ว รอเข้าระบบ' },
+            { id: 2, date: '2026-10-28', tripNo: 'CO4RA69554', storeNo: '6384', storeName: 'สาขา สุขุมวิท-สว่างฟ้า', orderNo: 'C436874305', boxId: '5830873', vehicle: '71-0710', carrier: 'บจ. เมอร์เมดโลจิสติกส์', reason: 'พนักงานลืมกดปิดงาน', status: 'ยังไม่ปิดงาน', note: 'ติดปัญหาเที่ยวเดียวกัน' },
+            { id: 3, date: '2026-10-28', tripNo: 'CO4RA68757', storeNo: '23055', storeName: 'สาขา ตลาดกลางผลไม้ตะพง (ระยอง)', orderNo: 'C435162605', boxId: '1056870039', vehicle: '71-0711', carrier: 'บจ. เมอร์เมดโลจิสติกส์', reason: 'ระบบ Application/เน็ต ขัดข้อง', status: 'ยังไม่ปิดงาน', note: 'พขร. แจ้งสัญญาณเน็ตหลุด' },
+            { id: 4, date: '2026-10-28', tripNo: 'CO4VA03629', storeNo: '19811', storeName: 'สาขา ถนนเนินพยอม-ตลาดเทศบาลมาบตาพุด(ระยอง)', orderNo: 'C434752405', boxId: '300736994', vehicle: '71-0713', carrier: 'บจ. เมอร์เมดโลจิสติกส์', reason: 'ลูกค้ายังไม่เซ็นรับ/ติดต่อไม่ได้', status: 'ยังไม่ปิดงาน', note: 'รอผู้จัดการสาขาตรวจสอบสินค้า' },
+            // Extra mock records to demonstrate repeated vehicle functionality & charts
+            { id: 5, date: '2026-10-27', tripNo: 'CO4RA69001', storeNo: '12044', storeName: 'สาขา บ้านค่าย (ระยอง)', orderNo: 'C436900111', boxId: '5830999', vehicle: '71-0710', carrier: 'บจ. เมอร์เมดโลจิสติกส์', reason: 'เอกสารใบส่งสินค้าไม่ครบ', status: 'ยังไม่ปิดงาน', note: 'เคสซ้ำจากเมื่อวาน' },
+            { id: 6, date: '2026-10-27', tripNo: 'CO4RA69005', storeNo: '5543', storeName: 'สาขา พัทยาใต้', orderNo: 'C436900555', boxId: '4005892', vehicle: '72-4589', carrier: 'บจ. เอ็กซ์เพรส ทรานสปอร์ต', reason: 'พนักงานลืมกดปิดงาน', status: 'ยังไม่ปิดงาน', note: 'ส่งใบเตือน พขร.' },
+            { id: 7, date: '2026-10-28', tripNo: 'CO4RA69010', storeNo: '8812', storeName: 'สาขา ศรีราชา', orderNo: 'C436901000', boxId: '4005893', vehicle: '72-4589', carrier: 'บจ. เอ็กซ์เพรส ทรานสปอร์ต', reason: 'สินค้ามีปัญหา/ปฏิเสธการรับ', status: 'ยังไม่ปิดงาน', note: 'กล่องบุบ รอคืนคลัง' },
+            { id: 8, date: '2026-10-28', tripNo: 'CO4RA69012', storeNo: '9901', storeName: 'สาขา อ่าวอุดม', orderNo: 'C436901200', boxId: '6001234', vehicle: '70-1122', carrier: 'บจ. เอสที โลจิสติกส์', reason: 'พนักงานลืมกดปิดงาน', status: 'ปิดงานเรียบร้อยแล้ว', note: 'ปิดงานย้อนหลังสำเร็จ' }
+        ];
+
+        let podData = [...defaultSampleData];
+        let chartTopVehiclesInstance = null;
+        let chartReasonsInstance = null;
+        let chartCarriersInstance = null;
+
+        // Initialize Theme
+        if (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) {
+            document.documentElement.classList.add('dark');
+            document.getElementById('themeIcon').className = 'fa-solid fa-sun text-lg text-amber-400';
+        }
+
+        // DOM Elements
+        const themeToggle = document.getElementById('themeToggle');
+        const themeIcon = document.getElementById('themeIcon');
+        const dropZone = document.getElementById('dropZone');
+        const fileInput = document.getElementById('fileInput');
+        const fileNameDisplay = document.getElementById('fileNameDisplay');
+        const btnLoadSample = document.getElementById('btnLoadSample');
+        const btnDownloadTemplate = document.getElementById('btnDownloadTemplate');
+        const btnExport = document.getElementById('btnExport');
+        const tableBody = document.getElementById('tableBody');
+        const emptyState = document.getElementById('emptyState');
+        const badgeCount = document.getElementById('badgeCount');
+
+        // Filters DOM
+        const searchInput = document.getElementById('searchInput');
+        const filterCarrier = document.getElementById('filterCarrier');
+        const filterReason = document.getElementById('filterReason');
+        const filterRepeated = document.getElementById('filterRepeated');
+
+        // Modal DOM
+        const editModal = document.getElementById('editModal');
+        const editForm = document.getElementById('editForm');
+        const btnCloseModal = document.getElementById('btnCloseModal');
+        const btnCancelModal = document.getElementById('btnCancelModal');
+
+        // Toggle Dark/Light Mode
+        themeToggle.addEventListener('click', () => {
+            document.documentElement.classList.toggle('dark');
+            const isDark = document.documentElement.classList.contains('dark');
+            themeIcon.className = isDark ? 'fa-solid fa-sun text-lg text-amber-400' : 'fa-solid fa-moon text-lg';
+            renderCharts(); // Redraw charts with dark mode styling adjustments
+        });
+
+        // Initialize Page
+        window.addEventListener('DOMContentLoaded', () => {
+            initApp();
+        });
+
+        function initApp() {
+            populateFilterOptions();
+            renderDashboard();
+            setupFileUpload();
+        }
+
+        // Calculate Vehicle Frequencies for identifying duplicates
+        function getVehicleFrequencies(dataList) {
+            const counts = {};
+            dataList.forEach(item => {
+                if (item.vehicle) {
+                    counts[item.vehicle] = (counts[item.vehicle] || 0) + 1;
+                }
+            });
+            return counts;
+        }
+
+        // Render All Dashboard Components
+        function renderDashboard() {
+            const filtered = getFilteredData();
+            renderKPICards(filtered);
+            renderCharts(filtered);
+            renderTable(filtered);
+        }
+
+        // Render KPI Cards
+        function renderKPICards(data) {
+            const pendingData = data.filter(d => d.status === 'ยังไม่ปิดงาน');
+
+            // 1. Total Pending Items (Box/Tote)
+            document.getElementById('kpiTotalItems').textContent = pendingData.length.toLocaleString();
+
+            // 2. Total Pending Trips
+            const uniqueTrips = new Set(pendingData.map(d => d.tripNo).filter(Boolean));
+            document.getElementById('kpiTotalTrips').textContent = uniqueTrips.size.toLocaleString();
+
+            // 3. Unique Vehicles with pending
+            const vehicleCounts = getVehicleFrequencies(pendingData);
+            const uniqueVehicles = Object.keys(vehicleCounts).length;
+            document.getElementById('kpiTotalVehicles').textContent = uniqueVehicles.toLocaleString();
+
+            // 4. Top Repeated Vehicle
+            let topVehicle = '-';
+            let maxCount = 0;
+            for (const [veh, count] of Object.entries(vehicleCounts)) {
+                if (count > maxCount) {
+                    maxCount = count;
+                    topVehicle = veh;
+                }
+            }
+
+            document.getElementById('kpiTopVehicle').textContent = topVehicle;
+            document.getElementById('kpiTopVehicleCount').textContent = maxCount > 0 ? `${maxCount} รายการค้าง` : '0 เคส';
+        }
+
+        // Render Charts with Chart.js
+        function renderCharts(data = getFilteredData()) {
+            const isDark = document.documentElement.classList.contains('dark');
+            const textColor = isDark ? '#cbd5e1' : '#475569';
+            const gridColor = isDark ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.05)';
+
+            const pendingData = data.filter(d => d.status === 'ยังไม่ปิดงาน');
+
+            // --- 1. Top 5 Vehicles Bar Chart ---
+            const vehCounts = getVehicleFrequencies(pendingData);
+            const sortedVehicles = Object.entries(vehCounts)
+                .sort((a, b) => b[1] - a[1])
+                .slice(0, 5);
+
+            const vehLabels = sortedVehicles.map(v => v[0]);
+            const vehValues = sortedVehicles.map(v => v[1]);
+            // Color highlight for duplicates (>1 case)
+            const vehColors = vehValues.map(val => val >= 2 ? '#f43f5e' : '#3b82f6');
+
+            if (chartTopVehiclesInstance) chartTopVehiclesInstance.destroy();
+            const ctxVeh = document.getElementById('chartTopVehicles').getContext('2d');
+            chartTopVehiclesInstance = new Chart(ctxVeh, {
+                type: 'bar',
+                data: {
+                    labels: vehLabels.length ? vehLabels : ['ไม่มีข้อมูล'],
+                    datasets: [{
+                        label: 'จำนวนเคสค้างปิดงาน POD',
+                        data: vehValues.length ? vehValues : [0],
+                        backgroundColor: vehColors,
+                        borderRadius: 8,
+                        barThickness: 28
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: { display: false },
+                        tooltip: {
+                            callbacks: {
+                                label: (context) => ` งานค้าง: ${context.parsed.y} รายการ ${context.parsed.y >= 2 ? '(พบปัญหาซ้ำ!)' : ''}`
+                            }
+                        }
+                    },
+                    scales: {
+                        x: { ticks: { color: textColor }, grid: { display: false } },
+                        y: { 
+                            ticks: { color: textColor, stepSize: 1 }, 
+                            grid: { color: gridColor },
+                            beginAtZero: true
+                        }
+                    }
+                }
+            });
+
+            // --- 2. Reasons Pie/Donut Chart ---
+            const reasonCounts = {};
+            pendingData.forEach(d => {
+                const r = d.reason || 'ไม่ระบุสาเหตุ';
+                reasonCounts[r] = (reasonCounts[r] || 0) + 1;
+            });
+
+            const reasonLabels = Object.keys(reasonCounts);
+            const reasonValues = Object.values(reasonCounts);
+            const palette = ['#0284c7', '#f59e0b', '#ec4899', '#8b5cf6', '#10b981', '#64748b'];
+
+            if (chartReasonsInstance) chartReasonsInstance.destroy();
+            const ctxReason = document.getElementById('chartReasons').getContext('2d');
+            chartReasonsInstance = new Chart(ctxReason, {
+                type: 'doughnut',
+                data: {
+                    labels: reasonLabels.length ? reasonLabels : ['ไม่มีข้อมูล'],
+                    datasets: [{
+                        data: reasonValues.length ? reasonValues : [1],
+                        backgroundColor: reasonValues.length ? palette.slice(0, reasonLabels.length) : ['#cbd5e1'],
+                        borderWidth: 2,
+                        borderColor: isDark ? '#1e293b' : '#ffffff'
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: {
+                            position: 'bottom',
+                            labels: { color: textColor, font: { size: 11, family: 'Kanit' }, boxWidth: 12 }
+                        }
+                    },
+                    cutout: '65%'
+                }
+            });
+
+            // --- 3. Carriers Bar Chart ---
+            const carrierCounts = {};
+            pendingData.forEach(d => {
+                const c = d.carrier || 'ไม่ระบุสังกัด';
+                carrierCounts[c] = (carrierCounts[c] || 0) + 1;
+            });
+
+            const carrierLabels = Object.keys(carrierCounts);
+            const carrierValues = Object.values(carrierCounts);
+
+            if (chartCarriersInstance) chartCarriersInstance.destroy();
+            const ctxCarrier = document.getElementById('chartCarriers').getContext('2d');
+            chartCarriersInstance = new Chart(ctxCarrier, {
+                type: 'bar',
+                data: {
+                    labels: carrierLabels.length ? carrierLabels : ['ไม่มีข้อมูล'],
+                    datasets: [{
+                        label: 'จำนวนรายการค้างปิด POD',
+                        data: carrierValues.length ? carrierValues : [0],
+                        backgroundColor: '#6366f1',
+                        borderRadius: 6,
+                        barThickness: 24
+                    }]
+                },
+                options: {
+                    indexAxis: 'y',
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: { display: false }
+                    },
+                    scales: {
+                        x: { ticks: { color: textColor, stepSize: 1 }, grid: { color: gridColor }, beginAtZero: true },
+                        y: { ticks: { color: textColor }, grid: { display: false } }
+                    }
+                }
+            });
+        }
+
+        // Render Data Table
+        function renderTable(data) {
+            tableBody.innerHTML = '';
+            const vehicleFrequencies = getVehicleFrequencies(podData.filter(d => d.status === 'ยังไม่ปิดงาน'));
+
+            if (data.length === 0) {
+                emptyState.classList.remove('hidden');
+                badgeCount.textContent = '0 รายการ';
+                return;
+            } else {
+                emptyState.classList.add('hidden');
+                badgeCount.textContent = `${data.length} รายการ`;
+            }
+
+            data.forEach((row) => {
+                const tr = document.createElement('tr');
+                const isRepeated = vehicleFrequencies[row.vehicle] >= 2 && row.status === 'ยังไม่ปิดงาน';
+                
+                // Row Styling based on repeated vehicle detection
+                if (isRepeated) {
+                    tr.className = 'bg-rose-50/70 hover:bg-rose-100/70 dark:bg-rose-950/30 dark:hover:bg-rose-900/40 transition-colors border-l-4 border-l-rose-500';
+                } else {
+                    tr.className = 'hover:bg-slate-50 dark:hover:bg-slate-700/50 transition-colors';
+                }
+
+                const statusBadge = row.status === 'ปิดงานเรียบร้อยแล้ว'
+                    ? `<span class="px-2.5 py-1 rounded-full text-[11px] font-medium bg-emerald-100 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300"><i class="fa-solid fa-check mr-1"></i>ปิดงานแล้ว</span>`
+                    : `<span class="px-2.5 py-1 rounded-full text-[11px] font-medium bg-amber-100 text-amber-800 dark:bg-amber-950/60 dark:text-amber-300"><i class="fa-solid fa-clock mr-1"></i>ค้างปิดงาน</span>`;
+
+                const vehicleTag = isRepeated
+                    ? `<span class="font-bold text-rose-700 dark:text-rose-400 flex items-center gap-1">
+                        ${row.vehicle} 
+                        <span class="px-1.5 py-0.5 text-[10px] bg-rose-200 text-rose-800 dark:bg-rose-800 dark:text-rose-100 rounded-md shadow-xs">ซ้ำ ${vehicleFrequencies[row.vehicle]} เที่ยว</span>
+                       </span>`
+                    : `<span class="font-medium text-slate-800 dark:text-slate-200">${row.vehicle}</span>`;
+
+                tr.innerHTML = `
+                    <td class="p-3.5 whitespace-nowrap text-slate-600 dark:text-slate-300">${row.date || '-'}</td>
+                    <td class="p-3.5 whitespace-nowrap">${vehicleTag}</td>
+                    <td class="p-3.5 whitespace-nowrap text-slate-600 dark:text-slate-300">${row.carrier || '-'}</td>
+                    <td class="p-3.5 whitespace-nowrap font-mono font-medium text-blue-600 dark:text-blue-400">${row.tripNo || '-'}</td>
+                    <td class="p-3.5 max-w-[200px]">
+                        <div class="font-semibold text-slate-800 dark:text-slate-200 truncate">${row.storeName || '-'}</div>
+                        <div class="text-[11px] text-slate-400">รหัส: ${row.storeNo || '-'}</div>
+                    </td>
+                    <td class="p-3.5 whitespace-nowrap font-mono">
+                        <div class="text-slate-700 dark:text-slate-300">${row.orderNo || '-'}</div>
+                        <div class="text-[11px] text-slate-400">Tote: ${row.boxId || '-'}</div>
+                    </td>
+                    <td class="p-3.5 max-w-[180px]">
+                        <span class="inline-block truncate max-w-[170px] px-2 py-0.5 rounded bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-300" title="${row.reason}">
+                            ${row.reason || 'ไม่ระบุ'}
+                        </span>
+                    </td>
+                    <td class="p-3.5 whitespace-nowrap">
+                        ${statusBadge}
+                        ${row.note ? `<div class="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5 max-w-[150px] truncate" title="${row.note}"><i class="fa-regular fa-note-sticky mr-1"></i>${row.note}</div>` : ''}
+                    </td>
+                    <td class="p-3.5 whitespace-nowrap text-center">
+                        <button onclick="openEditModal(${row.id})" class="p-1.5 text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-200 rounded-lg hover:bg-blue-50 dark:hover:bg-slate-600 transition-colors" title="แก้ไข/บันทึกติดตามงาน">
+                            <i class="fa-solid fa-pen-to-square text-sm"></i>
+                        </button>
+                    </td>
+                `;
+                tableBody.appendChild(tr);
+            });
+        }
+
+        // Filter Logic
+        function getFilteredData() {
+            const search = searchInput.value.toLowerCase().trim();
+            const carrier = filterCarrier.value;
+            const reason = filterReason.value;
+            const repeated = filterRepeated.value;
+
+            const vehicleCounts = getVehicleFrequencies(podData.filter(d => d.status === 'ยังไม่ปิดงาน'));
+
+            return podData.filter(item => {
+                const matchSearch = !search || 
+                    (item.vehicle && item.vehicle.toLowerCase().includes(search)) ||
+                    (item.tripNo && item.tripNo.toLowerCase().includes(search)) ||
+                    (item.storeName && item.storeName.toLowerCase().includes(search)) ||
+                    (item.orderNo && item.orderNo.toLowerCase().includes(search)) ||
+                    (item.boxId && item.boxId.toLowerCase().includes(search));
+
+                const matchCarrier = !carrier || item.carrier === carrier;
+                const matchReason = !reason || item.reason === reason;
+
+                let matchRepeated = true;
+                if (repeated === 'repeated') {
+                    matchRepeated = (vehicleCounts[item.vehicle] >= 2) && item.status === 'ยังไม่ปิดงาน';
+                }
+
+                return matchSearch && matchCarrier && matchReason && matchRepeated;
+            });
+        }
+
+        // Dynamic Populate Dropdowns
+        function populateFilterOptions() {
+            const carriers = [...new Set(podData.map(d => d.carrier).filter(Boolean))];
+            const reasons = [...new Set(podData.map(d => d.reason).filter(Boolean))];
+
+            filterCarrier.innerHTML = '<option value="">ทั้งหมดทุกสังกัด</option>' + 
+                carriers.map(c => `<option value="${c}">${c}</option>`).join('');
+
+            filterReason.innerHTML = '<option value="">ทั้งหมดทุกสาเหตุ</option>' + 
+                reasons.map(r => `<option value="${r}">${r}</option>`).join('');
+        }
+
+        // Attach Filter Listeners
+        [searchInput, filterCarrier, filterReason, filterRepeated].forEach(element => {
+            element.addEventListener('change', renderDashboard);
+            element.addEventListener('keyup', renderDashboard);
+        });
+
+        // Setup File Uploading (Drag & Drop + Input)
+        function setupFileUpload() {
+            dropZone.addEventListener('click', () => fileInput.click());
+
+            dropZone.addEventListener('dragover', (e) => {
+                e.preventDefault();
+                dropZone.classList.add('border-blue-500', 'bg-blue-50/50');
+            });
+
+            dropZone.addEventListener('dragleave', () => {
+                dropZone.classList.remove('border-blue-500', 'bg-blue-50/50');
+            });
+
+            dropZone.addEventListener('drop', (e) => {
+                e.preventDefault();
+                dropZone.classList.remove('border-blue-500', 'bg-blue-50/50');
+                if (e.dataTransfer.files.length) {
+                    handleFile(e.dataTransfer.files[0]);
+                }
+            });
+
+            fileInput.addEventListener('change', (e) => {
+                if (e.target.files.length) {
+                    handleFile(e.target.files[0]);
+                }
+            });
+        }
+
+        // Parse Excel / CSV File via SheetJS
+        function handleFile(file) {
+            fileNameDisplay.textContent = `ไฟล์ที่โหลด: ${file.name}`;
+            fileNameDisplay.classList.remove('hidden');
+
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                try {
+                    const data = new Uint8Array(e.target.result);
+                    const workbook = XLSX.read(data, { type: 'array' });
+                    const firstSheetName = workbook.SheetNames[0];
+                    const worksheet = workbook.Sheets[firstSheetName];
+                    const jsonRows = XLSX.utils.sheet_to_json(worksheet, { defval: '' });
+
+                    if (jsonRows.length === 0) {
+                        alert('ไฟล์ว่างเปล่าหรือไม่พบข้อมูล');
+                        return;
+                    }
+
+                    // Map columns dynamically based on Excel/CSV Headers
+                    const mappedData = jsonRows.map((row, idx) => {
+                        return {
+                            id: idx + 1,
+                            date: row['วันที่'] || row['Date'] || new Date().toISOString().split('T')[0],
+                            tripNo: row['เลขที่ใบเที่ยว'] || row['Trip No'] || row['TripNo'] || '',
+                            storeNo: String(row['Store No'] || row['StoreNo'] || row['รหัสสาขา'] || ''),
+                            storeName: row['Store Name'] || row['StoreName'] || row['ชื่อสาขา'] || '',
+                            orderNo: String(row['Order No'] || row['OrderNo'] || ''),
+                            boxId: String(row['Box / Tote ID'] || row['Box ID'] || row['Tote ID'] || row['Box/Tote ID'] || ''),
+                            vehicle: String(row['ทะเบียน'] || row['ทะเบียนรถ'] || row['Vehicle'] || ''),
+                            carrier: row['สังกัด'] || row['ผู้ขนส่ง'] || row['Carrier'] || 'ไม่ระบุสังกัด',
+                            reason: row['สาเหตุที่ไม่ปิดงาน'] || row['สาเหตุ'] || 'พนักงานลืมกดปิดงาน',
+                            status: row['สถานะ POD'] || row['สถานะ'] || 'ยังไม่ปิดงาน',
+                            note: row['หมายเหตุ'] || row['บันทึกติดตาม'] || ''
+                        };
+                    });
+
+                    podData = mappedData;
+                    populateFilterOptions();
+                    renderDashboard();
+                } catch (err) {
+                    console.error(err);
+                    alert('เกิดข้อผิดพลาดในการอ่านไฟล์ กรุณาตรวจสอบรูปแบบไฟล์ CSV/Excel');
+                }
+            };
+            reader.readAsArrayBuffer(file);
+        }
+
+        // Quick Load Sample Data
+        btnLoadSample.addEventListener('click', () => {
+            podData = [...defaultSampleData];
+            fileNameDisplay.textContent = 'โหลดข้อมูลตัวอย่างสำเร็จ';
+            fileNameDisplay.classList.remove('hidden');
+            populateFilterOptions();
+            renderDashboard();
+        });
+
+        // Download Template CSV File
+        btnDownloadTemplate.addEventListener('click', () => {
+            const templateRows = [
+                {
+                    'วันที่': '2026-10-28',
+                    'เลขที่ใบเที่ยว': 'CO4RA69554',
+                    'Store No': '6384',
+                    'Store Name': 'สาขา สุขุมวิท-สว่างฟ้า',
+                    'Order No': 'C436874305',
+                    'Box / Tote ID': '5830872',
+                    'ทะเบียน': '71-0710',
+                    'สังกัด': 'บจ. เมอร์เมดโลจิสติกส์',
+                    'สาเหตุที่ไม่ปิดงาน': 'พนักงานลืมกดปิดงาน',
+                    'สถานะ POD': 'ยังไม่ปิดงาน',
+                    'หมายเหตุ': 'ติดตามเอกสาร'
+                }
+            ];
+            const ws = XLSX.utils.json_to_sheet(templateRows);
+            const wb = XLSX.utils.book_new();
+            XLSX.utils.book_append_sheet(wb, ws, 'Template');
+            XLSX.writeFile(wb, 'POD_Pending_Template.xlsx');
+        });
+
+        // Export Filtered Table Data to Excel
+        btnExport.addEventListener('click', () => {
+            const currentFiltered = getFilteredData();
+            if (currentFiltered.length === 0) {
+                alert('ไม่มีข้อมูลสำหรับ Export');
+                return;
+            }
+
+            const exportRows = currentFiltered.map(item => ({
+                'วันที่': item.date,
+                'ทะเบียน': item.vehicle,
+                'สังกัด': item.carrier,
+                'เลขที่ใบเที่ยว': item.tripNo,
+                'Store No': item.storeNo,
+                'Store Name': item.storeName,
+                'Order No': item.orderNo,
+                'Box / Tote ID': item.boxId,
+                'สาเหตุที่ไม่ปิดงาน': item.reason,
+                'สถานะ POD': item.status,
+                'บันทึกการติดตาม': item.note
+            }));
+
+            const ws = XLSX.utils.json_to_sheet(exportRows);
+            const wb = XLSX.utils.book_new();
+            XLSX.utils.book_append_sheet(wb, ws, 'POD_Pending_Report');
+            XLSX.writeFile(wb, `POD_Pending_Report_${new Date().toISOString().split('T')[0]}.xlsx`);
+        });
+
+        // Edit Item Modal Functions
+        window.openEditModal = function(id) {
+            const item = podData.find(d => d.id === id);
+            if (!item) return;
+
+            document.getElementById('editRowId').value = item.id;
+            document.getElementById('modalVehicle').value = item.vehicle;
+            document.getElementById('modalReason').value = item.reason || 'พนักงานลืมกดปิดงาน';
+            document.getElementById('modalStatus').value = item.status || 'ยังไม่ปิดงาน';
+            document.getElementById('modalNote').value = item.note || '';
+
+            editModal.classList.remove('hidden');
+        };
+
+        function closeModal() {
+            editModal.classList.add('hidden');
+        }
+
+        btnCloseModal.addEventListener('click', closeModal);
+        btnCancelModal.addEventListener('click', closeModal);
+
+        editForm.addEventListener('submit', (e) => {
+            e.preventDefault();
+            const id = parseInt(document.getElementById('editRowId').value, 10);
+            const item = podData.find(d => d.id === id);
+            
+            if (item) {
+                item.reason = document.getElementById('modalReason').value;
+                item.status = document.getElementById('modalStatus').value;
+                item.note = document.getElementById('modalNote').value;
+                
+                closeModal();
+                populateFilterOptions();
+                renderDashboard();
+            }
+        });
+    </script>
+</body>
+</html>
